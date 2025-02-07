@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
-import ScoreScreen from './ScoreScreen';
 
+// Only include each library once
 const libraries = ['places'];
 
 const GuessMap = ({ 
@@ -12,9 +12,13 @@ const GuessMap = ({
   actualLocation,
   isLastRound,
   isGameComplete,
-  finalScore
+  finalScore,
+  setSelectedLocation,
+  ws,
+  gameState,
+  mode
 }) => {
-  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [selectedLocation, _setSelectedLocation] = useState(null);
   const [isEnlarged, setIsEnlarged] = useState(false);
   const [showingScore, setShowingScore] = useState(false);
   const [mapCenter, setMapCenter] = useState({ lat: 20, lng: 0 });
@@ -26,30 +30,55 @@ const GuessMap = ({
     version: "weekly"
   });
 
+  // Update the internal state and expose it to parent
+  const setLocationState = (location) => {
+    _setSelectedLocation(location);
+    setSelectedLocation?.(location);  // Notify parent if they want to know
+  };
+
   const handleMapClick = (e) => {
     if (disabled) return;
     const newLocation = {
       lat: e.latLng.lat(),
       lng: e.latLng.lng()
     };
-    setSelectedLocation(newLocation);
+    setLocationState(newLocation);
     setMapCenter(newLocation);
   };
 
   const handleConfirmGuess = () => {
     if (selectedLocation && !disabled) {
-      onGuess(selectedLocation);
+      if (mode === 'multiplayer') {
+        ws.send(JSON.stringify({
+          type: 'MAKE_GUESS',
+          location: selectedLocation
+        }));
+      } else {
+        onGuess(selectedLocation);
+      }
       setShowingScore(true);
     }
   };
 
   const handleNextRound = () => {
     setShowingScore(false);
-    setSelectedLocation(null);
+    setLocationState(null);  // Use the new setter
     setMapCenter({ lat: 20, lng: 0 });
     setIsEnlarged(false);
     onNextRound();
   };
+
+  useEffect(() => {
+    // Only run cleanup for multiplayer mode
+    if (!ws || mode !== 'multiplayer') return;
+    
+    return () => {
+      if (window.guessMarker) {
+        window.guessMarker.setMap(null);
+        window.guessMarker = null;
+      }
+    };
+  }, [ws, gameState?.roundNumber, mode]);
 
   if (loadError) return <div>Error loading maps: {loadError.message}</div>;
   if (!isLoaded) return <div>Loading maps...</div>;
@@ -74,17 +103,6 @@ const GuessMap = ({
     );
   }
 
-  if (showingScore && actualLocation) {
-    return (
-      <ScoreScreen
-        actualLocation={actualLocation}
-        guessLocation={selectedLocation}
-        onNextRound={handleNextRound}
-        isLastRound={isLastRound}
-      />
-    );
-  }
-
   return (
     <div 
       onMouseEnter={() => setIsEnlarged(true)}
@@ -100,6 +118,9 @@ const GuessMap = ({
           center={mapCenter}
           zoom={2}
           onClick={handleMapClick}
+          onLoad={map => {
+            mapRef.current = map;
+          }}
           options={{
             streetViewControl: false,
             mapTypeControl: false,

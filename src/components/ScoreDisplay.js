@@ -1,10 +1,30 @@
 import React from 'react';
 
-const ScoreDisplay = ({ score, round, totalRounds }) => {
+const ScoreDisplay = ({ gameState, playerId }) => {
+  if (!gameState) return null;
+
   return (
-    <div className="fixed top-5 left-5 bg-white/90 p-4 rounded-lg shadow-lg z-50">
-      <div className="text-base font-semibold">Round {round}/{totalRounds}</div>
-      <div className="text-xl font-bold text-purple-600">{score} points</div>
+    <div className="score-display">
+      <h2>Scores</h2>
+      <div className="players-list">
+        {gameState.players.map(player => (
+          <div 
+            key={player.id} 
+            className={`player ${player.id === playerId ? 'current-player' : ''}`}
+          >
+            <span>{player.id}</span>
+            <span>{player.score} points</span>
+            {player.hasGuessed && <span>(Guessed)</span>}
+          </div>
+        ))}
+      </div>
+      {gameState.timer <= 0 && (
+        <button 
+          onClick={() => ws.send(JSON.stringify({ type: 'START_GAME' }))}
+        >
+          Start Next Round
+        </button>
+      )}
     </div>
   );
 };

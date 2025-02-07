@@ -16,10 +16,13 @@ const mapContainerStyle = {
   width: '100%'
 };
 
-const StreetView = ({ onReady }) => {
+const StreetView = ({ onReady, onLocationSelected }) => {
   const [streetViewService, setStreetViewService] = useState(null);
   const [validLocation, setValidLocation] = useState(null);
   const [panorama, setPanorama] = useState(null);
+  const [ws, setWs] = useState(null);
+  const [gameState, setGameState] = useState(null);
+  const [playerId, setPlayerId] = useState(null);
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
@@ -96,6 +99,30 @@ const StreetView = ({ onReady }) => {
     }
   }, [streetViewService, findValidLocation, validLocation]);
 
+  useEffect(() => {
+    const socket = new WebSocket('ws://localhost:3001');
+    
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      switch (data.type) {
+        case 'INIT':
+          setPlayerId(data.playerId);
+          setGameState(data.gameState);
+          break;
+        case 'GAME_STATE_UPDATE':
+          setGameState(data.gameState);
+          break;
+      }
+    };
+    
+    setWs(socket);
+    
+    return () => {
+      socket.close();
+    };
+  }, []);
+
   if (loadError) {
     console.error('Maps load error:', loadError);
     return <div>Error loading maps. Please check your API key and configuration.</div>;
@@ -145,6 +172,9 @@ const StreetView = ({ onReady }) => {
           }}
         />
       </GoogleMap>
+      <div className="timer">
+        Time remaining: {gameState?.timer || 0}s
+      </div>
     </div>
   );
 };
